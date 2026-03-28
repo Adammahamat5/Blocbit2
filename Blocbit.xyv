@@ -1,0 +1,1342 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const COLORS = {
+  bg: "#0B0E11",
+  bgCard: "#161A1E",
+  bgCard2: "#1E2329",
+  border: "#2B3139",
+  gold: "#FCD535",
+  goldDim: "#B8960C",
+  green: "#0ECB81",
+  red: "#F6465D",
+  text: "#EAECEF",
+  textMuted: "#848E9C",
+  textDim: "#5E6673",
+};
+
+const MINING_PLANS = [
+  { id: 1, price: 5,   label: "Starter",   ratePerSec: 0.00000000003858, totalReward: 0.0001,  color: "#4A90E2" },
+  { id: 2, price: 15,  label: "Basic",     ratePerSec: 0.00000000011574, totalReward: 0.0003,  color: "#7B68EE" },
+  { id: 3, price: 50,  label: "Bronze",    ratePerSec: 0.00000000038580, totalReward: 0.001,   color: "#CD7F32" },
+  { id: 4, price: 100, label: "Silver",    ratePerSec: 0.00000000077160, totalReward: 0.002,   color: "#C0C0C0" },
+  { id: 5, price: 180, label: "Gold",      ratePerSec: 0.00000000138888, totalReward: 0.0036,  color: "#FCD535", popular: true },
+  { id: 6, price: 300, label: "Platinum",  ratePerSec: 0.00000000231481, totalReward: 0.006,   color: "#00D4FF" },
+  { id: 7, price: 380, label: "Diamond",   ratePerSec: 0.00000000293209, totalReward: 0.0076,  color: "#B9F2FF" },
+  { id: 8, price: 400, label: "Elite",     ratePerSec: 0.00000000308641, totalReward: 0.008,   color: "#FF6B35" },
+  { id: 9, price: 480, label: "Pro",       ratePerSec: 0.00000000370370, totalReward: 0.0096,  color: "#FF4081" },
+  { id: 10,price: 500, label: "Master",    ratePerSec: 0.00000000385802, totalReward: 0.01,    color: "#76FF03" },
+  { id: 11,price: 580, label: "Expert",    ratePerSec: 0.00000000447530, totalReward: 0.0116,  color: "#FF9100" },
+  { id: 12,price: 1000,label: "Legend",    ratePerSec: 0.00000000771604, totalReward: 0.02,    color: "#FCD535" },
+];
+
+const POOLS = [
+  { id: 1, name: "Pool Alpha",   capacity: 2000000,  current: 1340000, apy: "12%" },
+  { id: 2, name: "Pool Beta",    capacity: 15000000, current: 7800000, apy: "18%" },
+  { id: 3, name: "Pool Gamma",   capacity: 50000000, current: 12000000,apy: "24%" },
+];
+
+const TASKS = [
+  { id: 1, icon: "☀️", title: "Daily Login",      reward: "500 FCFA",   type: "fcfa",  done: false },
+  { id: 2, icon: "👥", title: "Invite a Friend",  reward: "0.001 BLB",  type: "token", done: false },
+  { id: 3, icon: "📺", title: "Watch an Ad",      reward: "250 FCFA",   type: "fcfa",  done: true  },
+  { id: 4, icon: "✅", title: "Complete Profile", reward: "1,000 FCFA", type: "fcfa",  done: true  },
+];
+
+const MOCK_TXS = [
+  { id: 1, type: "deposit",    amount: "+50,000 FCFA",  date: "2026-03-27", status: "completed" },
+  { id: 2, type: "mining",     amount: "+0.00012 BLB",  date: "2026-03-26", status: "completed" },
+  { id: 3, type: "withdrawal", amount: "-25,000 FCFA",  date: "2026-03-25", status: "completed" },
+  { id: 4, type: "referral",   amount: "+2,500 FCFA",   date: "2026-03-24", status: "completed" },
+  { id: 5, type: "investment", amount: "-10,000 FCFA",  date: "2026-03-23", status: "active"    },
+];
+
+const CRYPTO_PRICES = [
+  { symbol: "BTC", price: "67,432.18", change: "+2.34%" },
+  { symbol: "ETH", price: "3,521.44",  change: "+1.87%" },
+  { symbol: "BNB", price: "412.33",    change: "-0.52%" },
+  { symbol: "SOL", price: "182.91",    change: "+4.11%" },
+  { symbol: "BLB", price: "0.0024",    change: "+12.4%" },
+  { symbol: "ADA", price: "0.6821",    change: "-1.23%" },
+  { symbol: "XRP", price: "0.5943",    change: "+0.78%" },
+];
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const fmt = (n, d = 2) => Number(n).toFixed(d);
+const fmtFCFA = (n) => Number(n).toLocaleString("fr-FR") + " FCFA";
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0B0E11;
+    --bgCard: #161A1E;
+    --bgCard2: #1E2329;
+    --border: #2B3139;
+    --gold: #FCD535;
+    --goldDim: #B8960C;
+    --green: #0ECB81;
+    --red: #F6465D;
+    --text: #EAECEF;
+    --muted: #848E9C;
+    --dim: #5E6673;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Ticker */
+  @keyframes ticker {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .ticker-track { animation: ticker 30s linear infinite; display: flex; }
+  .ticker-wrap { overflow: hidden; }
+
+  /* Pulse */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .pulse { animation: pulse 2s ease-in-out infinite; }
+
+  /* Mining counter */
+  @keyframes countUp { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+  .count-anim { animation: countUp 0.3s ease; }
+
+  /* Glow */
+  @keyframes glow {
+    0%,100% { box-shadow: 0 0 12px rgba(252,213,53,0.15); }
+    50%      { box-shadow: 0 0 28px rgba(252,213,53,0.40); }
+  }
+  .glow-gold { animation: glow 3s ease-in-out infinite; }
+
+  /* Fade in */
+  @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation: fadeIn 0.4s ease forwards; }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; }
+
+  /* Mining bar fill */
+  @keyframes barFill { from{width:0} to{width:var(--w)} }
+
+  /* Hover card */
+  .card-hover { transition: transform 0.2s, border-color 0.2s; }
+  .card-hover:hover { transform: translateY(-2px); border-color: var(--gold) !important; }
+
+  /* Button */
+  .btn-gold {
+    background: linear-gradient(135deg, #FCD535 0%, #F0A500 100%);
+    color: #0B0E11;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .btn-gold:hover { opacity: 0.9; transform: scale(1.01); }
+  .btn-gold:active { transform: scale(0.98); }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .btn-outline:hover { border-color: var(--gold); background: rgba(252,213,53,0.05); }
+
+  /* Input */
+  .inp {
+    background: var(--bgCard2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .inp:focus { border-color: var(--gold); }
+  .inp::placeholder { color: var(--dim); }
+
+  /* Progress bar */
+  .progress-bar {
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #FCD535, #F0A500);
+    transition: width 1s ease;
+  }
+
+  /* Nav */
+  .nav-item {
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s, color 0.2s;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .nav-item.active { color: var(--gold); }
+  .nav-item:hover { color: var(--text); }
+
+  /* Status badge */
+  .badge {
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-green { background: rgba(14,203,129,0.15); color: #0ECB81; }
+  .badge-gold  { background: rgba(252,213,53,0.15);  color: #FCD535; }
+  .badge-red   { background: rgba(246,70,93,0.15);   color: #F6465D; }
+  .badge-blue  { background: rgba(74,144,226,0.15);  color: #4A90E2; }
+
+  /* Toast */
+  @keyframes toastIn  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes toastOut { from{opacity:1} to{opacity:0} }
+  .toast { animation: toastIn 0.3s ease; }
+
+  /* Mobile bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bgCard);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 12px;
+    z-index: 100;
+  }
+
+  /* Desktop top nav */
+  .top-nav {
+    background: var(--bgCard);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 99;
+  }
+
+  /* Grid helpers */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  @media(max-width:640px) {
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .hide-mobile { display: none !important; }
+  }
+  @media(min-width:641px) {
+    .hide-desktop { display: none !important; }
+  }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset:0;
+    background: rgba(0,0,0,0.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+    padding: 16px;
+  }
+  .modal-box {
+    background: var(--bgCard);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%; max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Plan card */
+  .plan-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--bgCard2);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .plan-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .plan-card.popular { border-color: var(--gold); }
+
+  /* Dropdown */
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bgCard);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-width: 180px;
+    z-index: 200;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .dropdown-item:hover { background: var(--bgCard2); }
+
+  /* Separator */
+  .sep { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* Support chat bubble */
+  .chat-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 80%;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .bubble-user { background: rgba(252,213,53,0.15); border: 1px solid rgba(252,213,53,0.3); margin-left: auto; }
+  .bubble-bot  { background: var(--bgCard2); border: 1px solid var(--border); }
+`;
+
+// ─── COMPONENTS ──────────────────────────────────────────────────────────────
+
+function Toast({ msg, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2800); return () => clearTimeout(t); }, []);
+  return (
+    <div className="toast" style={{
+      position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)",
+      background: COLORS.bgCard2, border: `1px solid ${COLORS.border}`,
+      borderRadius: 10, padding: "12px 20px", fontSize: 14, zIndex: 300,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)", whiteSpace: "nowrap",
+      color: COLORS.text, display: "flex", alignItems: "center", gap: 8,
+    }}>
+      <span style={{ color: COLORS.gold }}>✦</span> {msg}
+    </div>
+  );
+}
+
+function Ticker() {
+  const items = [...CRYPTO_PRICES, ...CRYPTO_PRICES];
+  return (
+    <div className="ticker-wrap" style={{ background: COLORS.bgCard2, borderBottom: `1px solid ${COLORS.border}`, padding: "7px 0", overflow: "hidden" }}>
+      <div className="ticker-track" style={{ width: "max-content", display: "flex", gap: 0 }}>
+        {items.map((c, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 24px", fontSize: 13, borderRight: `1px solid ${COLORS.border}` }}>
+            <span style={{ color: COLORS.gold, fontWeight: 700 }}>{c.symbol}</span>
+            <span className="mono" style={{ color: COLORS.text }}>${c.price}</span>
+            <span style={{ color: c.change.startsWith("+") ? COLORS.green : COLORS.red }}>{c.change}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, icon, color = COLORS.gold }) {
+  return (
+    <div className="card-hover fade-in" style={{
+      background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+      borderRadius: 14, padding: "18px 20px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+          <div className="mono" style={{ fontSize: 20, fontWeight: 700, color: COLORS.text }}>{value}</div>
+          {sub && <div style={{ color: COLORS.textMuted, fontSize: 12, marginTop: 4 }}>{sub}</div>}
+        </div>
+        <div style={{ fontSize: 22, background: `${color}18`, borderRadius: 10, padding: "8px 10px" }}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+function PoolCard({ pool }) {
+  const pct = (pool.current / pool.capacity) * 100;
+  const remaining = pool.capacity - pool.current;
+  const full = pct >= 100;
+  return (
+    <div className="card-hover" style={{
+      background: COLORS.bgCard, border: `1px solid ${full ? COLORS.red : COLORS.border}`,
+      borderRadius: 14, padding: 20,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{pool.name}</div>
+          <span className="badge badge-gold" style={{ marginTop: 4, display: "inline-block" }}>APY {pool.apy}</span>
+        </div>
+        {full && <span className="badge badge-red">FULL</span>}
+      </div>
+      <div className="progress-bar" style={{ height: 8, marginBottom: 10 }}>
+        <div className="progress-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.textMuted }}>
+        <span>{fmtFCFA(pool.current)} filled</span>
+        <span>{fmtFCFA(remaining)} left</span>
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.textDim, marginTop: 4 }}>Capacity: {fmtFCFA(pool.capacity)}</div>
+      <button
+        className="btn-gold"
+        disabled={full}
+        style={{ width: "100%", padding: "10px", borderRadius: 8, marginTop: 14, fontSize: 14, opacity: full ? 0.4 : 1 }}
+      >
+        {full ? "Pool Full" : "Invest Now"}
+      </button>
+    </div>
+  );
+}
+
+function MiningCounter({ ratePerSec, startTime }) {
+  const [tokens, setTokens] = useState(0);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const tick = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      setTokens(ratePerSec * elapsed);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [ratePerSec, startTime]);
+
+  return (
+    <span className="mono" style={{ color: COLORS.gold, fontSize: 15, fontWeight: 600 }}>
+      {tokens.toFixed(14)} BLB
+    </span>
+  );
+}
+
+// ─── PAGES ────────────────────────────────────────────────────────────────────
+
+function HomePage({ setPage, isLoggedIn }) {
+  return (
+    <div className="fade-in" style={{ padding: "0 0 80px" }}>
+      {/* Hero */}
+      <div style={{
+        background: `linear-gradient(135deg, #0B0E11 0%, #161A1E 50%, #0B0E11 100%)`,
+        padding: "60px 20px 50px",
+        textAlign: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(252,213,53,0.07) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+        <div className="glow-gold" style={{
+          display: "inline-block",
+          background: "linear-gradient(135deg, #FCD535, #F0A500)",
+          borderRadius: 16, padding: "10px 18px", marginBottom: 20,
+          fontSize: 13, fontWeight: 700, color: "#0B0E11",
+        }}>
+          🌍 Africa's #1 Crypto Platform
+        </div>
+        <h1 style={{ fontSize: "clamp(28px, 5vw, 52px)", fontWeight: 800, lineHeight: 1.1, marginBottom: 16 }}>
+          Invest. Mine. Earn.<br />
+          <span style={{ background: "linear-gradient(135deg, #FCD535, #F0A500)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Build Your Future.
+          </span>
+        </h1>
+        <p style={{ color: COLORS.textMuted, fontSize: 16, maxWidth: 480, margin: "0 auto 32px", lineHeight: 1.6 }}>
+          Blocbit gives African investors access to crypto investment pools, BLB token mining, and passive income — all from your phone.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <button className="btn-gold" style={{ padding: "14px 32px", borderRadius: 10, fontSize: 16 }}
+            onClick={() => setPage(isLoggedIn ? "dashboard" : "register")}>
+            {isLoggedIn ? "Go to Dashboard →" : "Start Earning Free →"}
+          </button>
+          <button className="btn-outline" style={{ padding: "14px 32px", borderRadius: 10, fontSize: 16 }}
+            onClick={() => setPage("mining")}>
+            Explore Mining
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 32, justifyContent: "center", marginTop: 40, flexWrap: "wrap" }}>
+          {[["$2.4M+","Total Invested"],["14,200+","Active Users"],["99.9%","Uptime"],["FCFA","Supported"]].map(([v, l]) => (
+            <div key={l} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.gold }}>{v}</div>
+              <div style={{ fontSize: 12, color: COLORS.textMuted }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Features */}
+      <div style={{ padding: "32px 16px" }}>
+        <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
+          Everything you need
+        </h2>
+        <div className="grid-2" style={{ maxWidth: 700, margin: "0 auto" }}>
+          {[
+            { icon: "📈", title: "Investment Pools", desc: "3 pools with up to 24% APY, from 5,000 FCFA minimum" },
+            { icon: "⛏️", title: "BLB Mining",       desc: "Mine Blocbit tokens 24/7 with 12 plans from $5" },
+            { icon: "📱", title: "Mobile Money",     desc: "Deposit & withdraw via Airtel Money & Moov Money" },
+            { icon: "👥", title: "Referral Rewards", desc: "Earn commission for every friend you invite" },
+          ].map(f => (
+            <div key={f.title} className="card-hover" style={{
+              background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+              borderRadius: 14, padding: 20,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>{f.icon}</div>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>{f.title}</div>
+              <div style={{ color: COLORS.textMuted, fontSize: 13, lineHeight: 1.5 }}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pool preview */}
+      <div style={{ padding: "0 16px 24px" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Investment Pools</h2>
+        <div className="grid-3">
+          {POOLS.map(p => <PoolCard key={p.id} pool={p} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardPage({ user, setPage }) {
+  const miningStart = useRef(Date.now() - 86400 * 3 * 1000).current;
+  const activePlan = MINING_PLANS[4]; // Gold plan
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <div style={{ color: COLORS.textMuted, fontSize: 13 }}>Welcome back,</div>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{user.name} 👋</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted }}>Referral code</div>
+          <div className="mono" style={{ color: COLORS.gold, fontSize: 13, fontWeight: 700 }}>BLB-{user.code}</div>
+        </div>
+      </div>
+
+      {/* Balance card */}
+      <div className="glow-gold" style={{
+        background: "linear-gradient(135deg, #1E2329 0%, #161A1E 100%)",
+        border: `1px solid ${COLORS.gold}30`,
+        borderRadius: 18, padding: "24px 20px", marginBottom: 20,
+      }}>
+        <div style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 6 }}>Total Portfolio Value</div>
+        <div className="mono" style={{ fontSize: 34, fontWeight: 800, color: COLORS.gold }}>{fmtFCFA(user.balance)}</div>
+        <div style={{ display: "flex", gap: 20, marginTop: 16 }}>
+          {[
+            { label: "BLB Token", value: `${user.tokens} BLB` },
+            { label: "Referral Earned", value: "7,500 FCFA" },
+            { label: "Mining (Active)", value: "Gold Plan" },
+          ].map(i => (
+            <div key={i.label}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted }}>{i.label}</div>
+              <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>{i.value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <button className="btn-gold" style={{ flex: 1, padding: 10, borderRadius: 8, fontSize: 14 }} onClick={() => setPage("wallet")}>Deposit</button>
+          <button className="btn-outline" style={{ flex: 1, padding: 10, borderRadius: 8, fontSize: 14 }} onClick={() => setPage("wallet")}>Withdraw</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid-2" style={{ marginBottom: 20 }}>
+        <StatCard label="Active Investment" value="10,000 FCFA" sub="Pool Alpha · 12% APY" icon="📈" />
+        <StatCard label="Daily Earnings" value="~33 FCFA" sub="Est. based on pool" icon="💰" color={COLORS.green} />
+        <StatCard label="BLB Mining" icon="⛏️"
+          value={<MiningCounter ratePerSec={activePlan.ratePerSec} startTime={miningStart} />}
+          sub="Gold Plan · Live"
+        />
+        <StatCard label="Referrals" value="12 users" sub="+7,500 FCFA earned" icon="👥" color="#7B68EE" />
+      </div>
+
+      {/* Recent Transactions */}
+      <div style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 18 }}>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Transactions</div>
+        {MOCK_TXS.map(tx => (
+          <div key={tx.id} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`,
+          }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%",
+                background: COLORS.bgCard2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+              }}>
+                {tx.type === "deposit" ? "⬇️" : tx.type === "withdrawal" ? "⬆️" : tx.type === "mining" ? "⛏️" : tx.type === "referral" ? "👥" : "📈"}
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>{tx.type}</div>
+                <div style={{ fontSize: 12, color: COLORS.textMuted }}>{tx.date}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="mono" style={{
+                fontSize: 14, fontWeight: 700,
+                color: tx.amount.startsWith("+") ? COLORS.green : COLORS.red,
+              }}>{tx.amount}</div>
+              <span className={`badge ${tx.status === "completed" ? "badge-green" : "badge-gold"}`}>{tx.status}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WalletPage({ user, toast }) {
+  const [tab, setTab] = useState("deposit");
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("airtel");
+
+  const handleSubmit = () => {
+    if (!amount || isNaN(amount)) return toast("Please enter a valid amount");
+    const n = Number(amount);
+    if (tab === "withdraw") {
+      if (n < 10000) return toast("Minimum withdrawal is 10,000 FCFA");
+      if (n > 500000) return toast("Maximum withdrawal is 500,000 FCFA");
+    }
+    toast(`${tab === "deposit" ? "Deposit" : "Withdrawal"} of ${fmtFCFA(n)} initiated ✓`);
+    setAmount("");
+  };
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20 }}>Wallet</h2>
+
+      {/* Balance */}
+      <div style={{
+        background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+        borderRadius: 16, padding: 20, marginBottom: 20,
+      }}>
+        <div style={{ fontSize: 13, color: COLORS.textMuted }}>Available Balance</div>
+        <div className="mono" style={{ fontSize: 30, fontWeight: 800, color: COLORS.gold, margin: "6px 0" }}>{fmtFCFA(user.balance)}</div>
+        <div style={{ fontSize: 13, color: COLORS.textMuted }}>{user.tokens} BLB Tokens</div>
+      </div>
+
+      {/* Withdrawal rules */}
+      <div style={{ background: "rgba(252,213,53,0.06)", border: `1px solid rgba(252,213,53,0.2)`, borderRadius: 12, padding: 14, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.gold, marginBottom: 6 }}>⚠️ Withdrawal Rules</div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.7 }}>
+          • Min: 10,000 FCFA — Max: 500,000 FCFA<br />
+          • Maximum 2 withdrawals per month<br />
+          • Investment stops immediately after withdrawal
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, background: COLORS.bgCard2, borderRadius: 10, padding: 4, marginBottom: 20 }}>
+        {["deposit", "withdraw"].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "10px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: tab === t ? COLORS.gold : "transparent",
+            color: tab === t ? "#0B0E11" : COLORS.textMuted,
+            fontWeight: 700, fontSize: 14, fontFamily: "'Space Grotesk', sans-serif",
+            transition: "all 0.2s", textTransform: "capitalize",
+          }}>{t}</button>
+        ))}
+      </div>
+
+      {/* Payment method */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 8, fontWeight: 500 }}>Payment Method</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          {[
+            { id: "airtel", label: "Airtel Money", icon: "📱" },
+            { id: "moov",   label: "Moov Money",   icon: "📲" },
+            { id: "card",   label: "Visa / MC",    icon: "💳" },
+          ].map(m => (
+            <div key={m.id} onClick={() => setMethod(m.id)} style={{
+              border: `1px solid ${method === m.id ? COLORS.gold : COLORS.border}`,
+              borderRadius: 10, padding: "12px 8px", textAlign: "center",
+              cursor: "pointer", background: method === m.id ? "rgba(252,213,53,0.07)" : COLORS.bgCard,
+              transition: "all 0.2s",
+            }}>
+              <div style={{ fontSize: 20 }}>{m.icon}</div>
+              <div style={{ fontSize: 11, marginTop: 4, color: method === m.id ? COLORS.gold : COLORS.textMuted }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Amount */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 8 }}>Amount (FCFA)</div>
+        <input
+          className="inp mono"
+          placeholder="e.g. 25000"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          style={{ padding: "14px 16px", borderRadius: 10, fontSize: 16 }}
+        />
+      </div>
+
+      <button className="btn-gold" style={{ width: "100%", padding: 14, borderRadius: 10, fontSize: 16 }} onClick={handleSubmit}>
+        {tab === "deposit" ? "Deposit Funds" : "Request Withdrawal"}
+      </button>
+
+      {/* TX History */}
+      <div style={{ marginTop: 28 }}>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Transaction History</div>
+        {MOCK_TXS.map(tx => (
+          <div key={tx.id} style={{
+            display: "flex", justifyContent: "space-between",
+            padding: "12px 0", borderBottom: `1px solid ${COLORS.border}`,
+          }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>{tx.type}</div>
+              <div style={{ fontSize: 12, color: COLORS.textMuted }}>{tx.date}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="mono" style={{ fontWeight: 700, color: tx.amount.startsWith("+") ? COLORS.green : COLORS.red }}>{tx.amount}</div>
+              <span className={`badge ${tx.status === "completed" ? "badge-green" : "badge-gold"}`}>{tx.status}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiningPage({ user, toast }) {
+  const [activeMining, setActiveMining] = useState({ planId: 5, startTime: Date.now() - 86400 * 3 * 1000 });
+  const [selected, setSelected] = useState(null);
+  const activePlan = MINING_PLANS.find(p => p.id === activeMining?.planId);
+  const daysLeft = activeMining ? Math.max(0, 30 - ((Date.now() - activeMining.startTime) / (86400 * 1000))) : 0;
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>⛏️ BLB Mining</h2>
+      <p style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 20 }}>Mine Blocbit tokens 24/7. Rewards vary by network conditions.</p>
+
+      {/* Active mining */}
+      {activeMining && activePlan && (
+        <div className="glow-gold" style={{
+          background: "linear-gradient(135deg, #1a1600 0%, #1E2329 100%)",
+          border: `1px solid ${COLORS.gold}40`,
+          borderRadius: 16, padding: 20, marginBottom: 24,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, color: COLORS.textMuted }}>Active Plan</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.gold }}>{activePlan.label} — ${activePlan.price}</div>
+            </div>
+            <span className="badge badge-green pulse">● MINING</span>
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 4 }}>Total Mined</div>
+          <MiningCounter ratePerSec={activePlan.ratePerSec} startTime={activeMining.startTime} />
+          <div className="progress-bar" style={{ height: 6, marginTop: 14, marginBottom: 6 }}>
+            <div className="progress-fill" style={{ width: `${((30 - daysLeft) / 30) * 100}%` }} />
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.textMuted }}>{fmt(daysLeft, 1)} days remaining · Total reward: {activePlan.totalReward} BLB</div>
+        </div>
+      )}
+
+      {/* Plans */}
+      <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>All Mining Plans</div>
+      <div className="grid-2">
+        {MINING_PLANS.map(plan => {
+          const isActive = activeMining?.planId === plan.id;
+          return (
+            <div key={plan.id} className={`plan-card ${plan.popular ? "popular" : ""}`}
+              onClick={() => setSelected(plan)}
+              style={{ borderColor: isActive ? COLORS.green : plan.popular ? COLORS.gold : COLORS.border }}>
+              {plan.popular && (
+                <div style={{
+                  position: "absolute", top: -10, right: 12,
+                  background: "linear-gradient(135deg, #FCD535, #F0A500)",
+                  color: "#0B0E11", fontSize: 10, fontWeight: 800,
+                  padding: "2px 10px", borderRadius: 99,
+                }}>⭐ POPULAR</div>
+              )}
+              {isActive && (
+                <div style={{
+                  position: "absolute", top: -10, left: 12,
+                  background: COLORS.green, color: "#0B0E11", fontSize: 10, fontWeight: 800,
+                  padding: "2px 10px", borderRadius: 99,
+                }}>● ACTIVE</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontWeight: 800, fontSize: 16, color: plan.color }}>${plan.price}</span>
+                <span style={{ fontSize: 12, color: COLORS.textMuted }}>{plan.label}</span>
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.7 }}>
+                <div>Total: <span className="mono" style={{ color: COLORS.text }}>{plan.totalReward} BLB</span></div>
+                <div>Duration: <span style={{ color: COLORS.text }}>30 days</span></div>
+              </div>
+              <button className="btn-gold" style={{
+                width: "100%", marginTop: 10, padding: "8px", borderRadius: 7, fontSize: 13,
+                opacity: isActive ? 0.4 : 1,
+              }} onClick={e => { e.stopPropagation(); if (!isActive) toast(`${plan.label} plan selected. Complete payment to start mining.`); }}>
+                {isActive ? "Active" : "Start Mining"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Plan detail modal */}
+      {selected && (
+        <div className="modal-bg" onClick={() => setSelected(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>{selected.label} Plan</div>
+            <div style={{ color: COLORS.gold, fontSize: 28, fontWeight: 800, marginBottom: 16 }}>${selected.price}</div>
+            <div style={{ background: COLORS.bgCard2, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+              {[
+                ["Duration", "30 days"],
+                ["Total Reward", `${selected.totalReward} BLB`],
+                ["Rate/second", `${selected.ratePerSec.toFixed(20)} BLB`],
+                ["Status", "Variable (network-dependent)"],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                  <span style={{ color: COLORS.textMuted, fontSize: 13 }}>{k}</span>
+                  <span className="mono" style={{ fontSize: 13 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 16, lineHeight: 1.6 }}>
+              ⚠️ Mining rewards are variable and non-guaranteed. Actual earnings depend on network conditions and BLB token price at time of payout.
+            </p>
+            <button className="btn-gold" style={{ width: "100%", padding: 14, borderRadius: 10, fontSize: 15 }}
+              onClick={() => { toast(`${selected.label} plan activated! Mining starts after payment.`); setSelected(null); }}>
+              Activate — ${selected.price}
+            </button>
+            <button className="btn-outline" style={{ width: "100%", padding: 12, borderRadius: 10, fontSize: 14, marginTop: 10 }}
+              onClick={() => setSelected(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TasksPage({ toast }) {
+  const [tasks, setTasks] = useState(TASKS);
+  const referralLink = "https://blocbit.io/ref/BLB-A7X92";
+
+  const complete = (id) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: true } : t));
+    const task = tasks.find(t => t.id === id);
+    toast(`Task complete! Earned ${task.reward} ✓`);
+  };
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>🎯 Tasks & Rewards</h2>
+      <p style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 20 }}>Complete tasks to earn FCFA and BLB tokens.</p>
+
+      {/* Tasks */}
+      {tasks.map(task => (
+        <div key={task.id} style={{
+          background: COLORS.bgCard, border: `1px solid ${task.done ? COLORS.green + "40" : COLORS.border}`,
+          borderRadius: 14, padding: 18, marginBottom: 12,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            <div style={{ fontSize: 28 }}>{task.icon}</div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{task.title}</div>
+              <div style={{ color: COLORS.gold, fontSize: 13, marginTop: 2 }}>+{task.reward}</div>
+            </div>
+          </div>
+          {task.done
+            ? <span className="badge badge-green">✓ Done</span>
+            : <button className="btn-gold" style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13 }} onClick={() => complete(task.id)}>Claim</button>
+          }
+        </div>
+      ))}
+
+      {/* Referral */}
+      <div style={{
+        background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+        borderRadius: 14, padding: 20, marginTop: 24,
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>👥 Referral Program</div>
+        <p style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 16 }}>Invite friends and earn commission on every referral investment.</p>
+        <div style={{ background: COLORS.bgCard2, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 4 }}>Your referral link</div>
+          <div className="mono" style={{ fontSize: 13, color: COLORS.gold, wordBreak: "break-all" }}>{referralLink}</div>
+        </div>
+        <div className="grid-2">
+          <div style={{ textAlign: "center", background: COLORS.bgCard2, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.gold }}>12</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted }}>Total Referrals</div>
+          </div>
+          <div style={{ textAlign: "center", background: COLORS.bgCard2, borderRadius: 10, padding: 14 }}>
+            <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: COLORS.green }}>7,500 FCFA</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted }}>Total Earned</div>
+          </div>
+        </div>
+        <button className="btn-gold" style={{ width: "100%", marginTop: 14, padding: 12, borderRadius: 10, fontSize: 14 }}
+          onClick={() => { navigator.clipboard?.writeText(referralLink); toast("Referral link copied! ✓"); }}>
+          📋 Copy Referral Link
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SupportPage() {
+  const [messages, setMessages] = useState([
+    { from: "bot", text: "👋 Hello! I'm the Blocbit support assistant. How can I help you today?" },
+  ]);
+  const [input, setInput] = useState("");
+  const bottomRef = useRef(null);
+
+  const faqs = [
+    "How do I deposit?",
+    "Withdrawal rules",
+    "Mining plans",
+    "Referral commission",
+  ];
+
+  const send = (text) => {
+    const msg = text || input.trim();
+    if (!msg) return;
+    const newMsgs = [...messages, { from: "user", text: msg }];
+    setMessages(newMsgs);
+    setInput("");
+    setTimeout(() => {
+      const replies = {
+        "How do I deposit?": "Go to Wallet → Deposit. We support Airtel Money, Moov Money, Visa, and Mastercard. Minimum deposit is 5,000 FCFA.",
+        "Withdrawal rules": "Min: 10,000 FCFA · Max: 500,000 FCFA · Max 2 per month. Note: active investments stop on withdrawal.",
+        "Mining plans": "We offer 12 mining plans from $5 to $1,000. Each runs 30 days and generates BLB tokens continuously.",
+        "Referral commission": "You earn a commission % on every investment made by your referrals. Check your referral stats in the Tasks tab.",
+      };
+      setMessages(prev => [...prev, { from: "bot", text: replies[msg] || "Thanks for your message! Our support team will respond within 24h. You can also email support@blocbit.io." }]);
+    }, 800);
+  };
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20 }}>💬 Support</h2>
+
+      {/* FAQ shortcuts */}
+      <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {faqs.map(q => (
+          <button key={q} className="btn-outline" style={{ padding: "6px 14px", borderRadius: 99, fontSize: 12 }} onClick={() => send(q)}>{q}</button>
+        ))}
+      </div>
+
+      {/* Chat */}
+      <div style={{
+        background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+        borderRadius: 14, padding: 16, minHeight: 320,
+        maxHeight: "50vh", overflowY: "auto", marginBottom: 14,
+        display: "flex", flexDirection: "column", gap: 12,
+      }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start" }}>
+            <div className={`chat-bubble ${m.from === "user" ? "bubble-user" : "bubble-bot"}`}>{m.text}</div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <input
+          className="inp"
+          placeholder="Type a message…"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && send()}
+          style={{ padding: "12px 16px", borderRadius: 10, fontSize: 14 }}
+        />
+        <button className="btn-gold" style={{ padding: "12px 18px", borderRadius: 10, fontSize: 16, flexShrink: 0 }} onClick={() => send()}>➤</button>
+      </div>
+    </div>
+  );
+}
+
+function AdminPage({ toast }) {
+  const [tab, setTab] = useState("users");
+
+  const mockUsers = [
+    { id: 1, name: "Adam Doe",     email: "adam@mail.com",   balance: 125000, status: "active",   joined: "2026-01-10" },
+    { id: 2, name: "Mariam A.",    email: "mariam@mail.com", balance: 47000,  status: "active",   joined: "2026-02-03" },
+    { id: 3, name: "Ibrahim K.",   email: "ibra@mail.com",   balance: 230000, status: "suspended",joined: "2026-01-28" },
+    { id: 4, name: "Fatima N.",    email: "fatima@mail.com", balance: 15000,  status: "active",   joined: "2026-03-05" },
+  ];
+
+  return (
+    <div className="fade-in" style={{ padding: "20px 16px 80px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 22 }}>🔐</span>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800 }}>Admin Panel</h2>
+          <div style={{ fontSize: 12, color: COLORS.textMuted }}>Platform Management</div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid-2" style={{ marginBottom: 20 }}>
+        <StatCard label="Total Users"    value="14,200" sub="+120 this week"   icon="👥" />
+        <StatCard label="Total Invested" value="2.4B FCFA" sub="Across 3 pools" icon="📈" color={COLORS.green} />
+        <StatCard label="Active Miners"  value="3,421"  sub="12 plan types"   icon="⛏️" />
+        <StatCard label="Pending Withdrawals" value="42" sub="Review required" icon="⬆️" color={COLORS.red} />
+      </div>
+
+      {/* Tab nav */}
+      <div style={{ display: "flex", gap: 4, background: COLORS.bgCard2, borderRadius: 10, padding: 4, marginBottom: 20 }}>
+        {["users", "pools", "transactions", "mining"].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "9px 4px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: tab === t ? COLORS.gold : "transparent",
+            color: tab === t ? "#0B0E11" : COLORS.textMuted,
+            fontWeight: 700, fontSize: 12, fontFamily: "'Space Grotesk', sans-serif",
+            textTransform: "capitalize", transition: "all 0.2s",
+          }}>{t}</button>
+        ))}
+      </div>
+
+      {/* Users */}
+      {tab === "users" && (
+        <div style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, borderRadius: 14, overflow: "hidden" }}>
+          {mockUsers.map((u, i) => (
+            <div key={u.id} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "14px 18px", borderBottom: i < mockUsers.length - 1 ? `1px solid ${COLORS.border}` : "none",
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                <div style={{ fontSize: 12, color: COLORS.textMuted }}>{u.email} · {u.joined}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="mono" style={{ fontSize: 13, color: COLORS.gold }}>{fmtFCFA(u.balance)}</span>
+                <span className={`badge ${u.status === "active" ? "badge-green" : "badge-red"}`}>{u.status}</span>
+                <button className="btn-outline" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11 }}
+                  onClick={() => toast(`Action taken on ${u.name}`)}>
+                  {u.status === "active" ? "Suspend" : "Restore"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pools */}
+      {tab === "pools" && (
+        <div className="grid-3">
+          {POOLS.map(p => <PoolCard key={p.id} pool={p} />)}
+        </div>
+      )}
+
+      {/* Transactions */}
+      {tab === "transactions" && (
+        <div style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, borderRadius: 14, overflow: "hidden" }}>
+          {MOCK_TXS.map((tx, i) => (
+            <div key={tx.id} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "14px 18px", borderBottom: i < MOCK_TXS.length - 1 ? `1px solid ${COLORS.border}` : "none",
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, textTransform: "capitalize" }}>{tx.type}</div>
+                <div style={{ fontSize: 12, color: COLORS.textMuted }}>{tx.date}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div className="mono" style={{ color: tx.amount.startsWith("+") ? COLORS.green : COLORS.red }}>{tx.amount}</div>
+                <span className={`badge ${tx.status === "completed" ? "badge-green" : "badge-gold"}`}>{tx.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Mining */}
+      {tab === "mining" && (
+        <div className="grid-2">
+          {MINING_PLANS.map(p => (
+            <div key={p.id} style={{
+              background: COLORS.bgCard, border: `1px solid ${COLORS.border}`,
+              borderRadius: 12, padding: 16,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontWeight: 700, color: p.color }}>{p.label}</span>
+                <span className="mono" style={{ color: COLORS.gold }}>${p.price}</span>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 8 }}>
+                Active miners: <span style={{ color: COLORS.text }}>{Math.floor(Math.random() * 400 + 50)}</span>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textMuted }}>
+                Total reward: <span className="mono" style={{ color: COLORS.text }}>{p.totalReward} BLB</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AUTH MODAL ──────────────────────────────────────────────────────────────
+
+function AuthModal({ mode, onClose, onLogin, toast }) {
+  const [tab, setTab] = useState(mode);
+  const [form, setForm] = useState({ name: "", email: "", password: "", code: "" });
+  const [step, setStep] = useState(1); // 1=form, 2=OTP
+
+  const handleSubmit = () => {
+    if (!form.email || !form.password) return toast("Please fill in all fields");
+    if (tab === "register" && !form.name) return toast("Name is required");
+    if (step === 1 && tab === "register") { setStep(2); toast("OTP sent to your email"); return; }
+    toast(tab === "login" ? "Welcome back! 🎉" : "Account created! Welcome to Blocbit 🎉");
+    onLogin({ name: form.name || "User", email: form.email, balance: 0, tokens: "0.00000", code: "A7X92" });
+    onClose();
+  };
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.03em" }}>
+            <span style={{ color: COLORS.gold }}>Bloc</span><span style={{ color: COLORS.text }}>bit</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 4, background: COLORS.bgCard2, borderRadius: 10, padding: 4, marginBottom: 24 }}>
+          {["login", "register"].map(t => (
+            <button key={t} onClick={() => { setTab(t); setStep(1); }} style={{
+              flex: 1, padding: 10, borderRadius: 8, border: "none", cursor: "pointer",
+              background: tab === t ? COLORS.gold : "transparent",
+              color: tab === t ? "#0B0E11" : COLORS.textMuted,
+              fontWeight: 700, fontSize: 14, fontFamily: "'Space Grotesk', sans-serif",
+              textTransform: "capitalize", transition: "all 0.2s",
+            }}>{t}</button>
+          ))}
+        </div>
+
+        {step === 1 ? (
+          <>
+            {tab === "register" && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 13, color: COLORS.textMuted, display: "block", marginBottom: 6 }}>Full Name</label>
+                <input className="inp" placeholder="Your name" value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  style={{ padding: "12px 14px", borderRadius: 10 }} />
+              </div>
+            )}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 13, color: COLORS.textMuted, display: "block", marginBottom: 6 }}>Email</label>
+              <input className="inp" placeholder="your@email.com" type="email" value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                style={{ padding: "12px 14px", borderRadius: 10 }} />
+            </div>
+            <div style={{ marginBottom: tab === "register" ? 14 : 20 }}>
+              <label style={{ fontSize: 13, color: COLORS.textMuted, display: "block", marginBottom: 6 }}>Password</label>
+              <input className="inp" placeholder="••••••••" type="password" value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                style={{ padding: "12px 14px", borderRadius: 10 }} />
+            </div>
+            {tab === "register" && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, color: COLORS.textMuted, display: "block", marginBottom: 6 }}>Referral Code (optional)</label>
+                <input className="inp" placeholder="e.g. BLB-A7X92" value={form.code}
+                  onChange={e => setForm({ ...form, code: e.target.value })}
+                  style={{ padding: "12px 14px", borderRadius: 10 }} />
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ textAlign: "center", marginBottom: 16, color: COLORS.textMuted, fontSize: 14 }}>
+              Enter the 6-digit OTP sent to <span style={{ color: COLORS.gold }}>{form.email}</span>
+            </div>
+            <input className="inp mono" placeholder="000000" maxLength={6}
+              style={{ padding: "16px 14px", borderRadius: 10, fontSize: 24, textAlign: "center", letterSpacing: "0.4em" }} />
+          </div>
+        )}
+
+        <button className="btn-gold" style={{ width: "100%", padding: 14, borderRadius: 10, fontSize: 16 }} onClick={handleSubmit}>
+          {tab === "login" ? "Sign In" : step === 1 ? "Continue →" : "Verify & Register"}
+        </button>
+
+        {tab === "register" && (
+          <div style={{ marginTop: 14, background: "rgba(252,213,53,0.06)", border: `1px solid rgba(252,213,53,0.2)`, borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>🤖</span> Optional: Enable AI facial verification for enhanced security after registration.
+            </div>
+          </div>
+        )}
+
+        <button style={{ width: "100%", background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer", marginTop: 14, fontSize: 14 }} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+
+export default function Blocbit() {
+  const [page, setPage] = useState("home");
+  const [user, setUser] = useState(null);
+  const [authModal, setAuthModal] = useState(null);
+  const [dropdown, setDropdown] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+  const dropRef = useRef(null);
+
+  const toast = (msg) => setToastMsg(msg);
+
+  const isLoggedIn = !!user;
+
+  // Demo user
+  const loginDemo = () => setUser({ name: "Adam", email: "adam@blocbit.io", balance: 125000, tokens: "0.00082140", code: "A7X92" });
+
+  const logout = () => { setUser(null); setPage("home"); setDropdown(false); };
+
+  const navItems = [
+    { id: "home",      label: "Home",    icon: "🏠" },
+    { id: "dashboard", label: "Account", icon: "📊" },
+    { id: "wallet",    label: "Wallet",  icon: "💳" },
+    { id: "mining",    label: "Mining",  icon: "⛏️" },
+    { id: "tasks",     label: "Tasks",   icon: "🎯" },
+    { id: "support",   label: "Support", icon: "💬" },
+  ];
+
+  const handleNavClick = (id) => {
+    if (["dashboard", "wallet"].includes(id) && !isLoggedIn) {
+      setAuthModal("login");
+      return;
+    }
+    setPage(id);
+  };
+
+  useEffect(() => {
+    const close = (e) => { if (!dropRef.current?.contains(e.target)) setDropdown(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const renderPage = () => {
+    switch (page) {
+      case "home":      return <HomePage setPage={handleNavClick} isLoggedIn={isLoggedIn} />;
+      case "dashboard": return isLoggedIn ? <DashboardPage user={user} setPage={setPage} /> : <HomePage setPage={handleNavClick} isLoggedIn={false} />;
+      case "wallet":    return isLoggedIn ? <WalletPage user={user} toast={toast} /> : <HomePage setPage={handleNavClick} isLoggedIn={false} />;
+      case "mining":    return <MiningPage user={user} toast={toast} />;
+      case "tasks":     return <TasksPage toast={toast} />;
+      case "support":   return <SupportPage />;
+      case "admin":     return <AdminPage toast={toast} />;
+      default:          return <HomePage setPage={handleNavClick} isLoggedIn={isLoggedIn} />;
+    }
+  };
+
+  return (
+    <>
+      <style>{css}</style>
+      <div style={{ minHeight: "100vh", background: COLORS.bg, paddingBottom: 60 }}>
+
+        {/* Top Nav */}
+        <nav className="top-nav">
+          <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58 }}>
+            {/* Logo */}
+            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: "-0.03em", cursor: "pointer" }} onClick={() => setPage("home")}>
+              <span style={{ color: COLORS.gold }}>Bloc</span><span style={{ color: COLORS.text }}>bit</span>
+            </div>
+
+            {/* Desktop nav */}
+            <div className="hide-mobile" style={{ display: "flex", gap: 4 }}>
+              {navItems.map(n => (
+                <button key={n.id} onClick={() => handleNavClick(n.id)} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "6px 14px", borderRadius: 8, fontSize: 14, fontWeight: 500,
+                  color: page === n.id ? COLORS.gold : COLORS.textMuted,
+                  fontFamily: "'Space Grotesk', sans-serif", transition: "color 0.2s",
+                }}>{n.label}</button>
+              ))}
+            </div>
+
+            {/* Right: 3-dot menu + admin */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {isLoggedIn && (
+                <button className="btn-outline hide-mobile" style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12 }}
+                  onClick={() => setPage("admin")}>⚙️ Admin</button>
+              )}
+              <div ref={dropRef} style={{ position: "relative" }}>
+                <button onClick={() => setDropdown(d => !d)} style={{
+                  background: COLORS.bgCard2, border: `1px solid ${COLORS.border}`,
+                  borderRadius: 8, padding: "8px 12px", cursor: "pointer", color: COLORS.text, fontSize: 18,
+                }}>⋮</button>
+                {dropdown && (
+                  <div className="dropdown">
+                    {isLoggedIn ? (
+                      <>
+                        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}` }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{user.name}</div>
+                          <div style={{ fontSize: 11, color: COLORS.textMuted }}>{user.email}</div>
+                        </div>
+                        <div className="dropdown-item" onClick={() => { setPage("dashboard"); setDropdown(false); }}>📊 Dashboard</div>
+                        <div className="dropdown-item" onClick={() => { setPage("admin"); setDropdown(false); }}>🔐 Admin Panel</div>
+                        <div className="dropdown-item" style={{ color: COLORS.red }} onClick={logout}>🚪 Logout</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="dropdown-item" onClick={() => { setAuthModal("login"); setDropdown(false); }}>🔑 Login</div>
+                        <div className="dropdown-item" onClick={() => { setAuthModal("register"); setDropdown(false); }}>✨ Register</div>
+                        <div className="dropdown-item" style={{ color: COLORS.gold, fontSize: 12 }} onClick={() => { loginDemo(); setDropdown(false); toast("Demo mode activated!"); }}>⚡ Try Demo</div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        {/* Ticker */}
+        <Ticker />
+
+        {/* Content */}
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          {renderPage()}
+        </div>
+
+        {/* Mobile bottom nav */}
+        <nav className="bottom-nav hide-desktop">
+          {navItems.map(n => (
+            <button key={n.id} className={`nav-item ${page === n.id ? "active" : ""}`}
+              onClick={() => handleNavClick(n.id)}
+              style={{ background: "none", border: "none" }}>
+              <span style={{ fontSize: 20 }}>{n.icon}</span>
+              <span style={{ fontSize: 10 }}>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Auth modal */}
+        {authModal && (
+          <AuthModal
+            mode={authModal}
+            onClose={() => setAuthModal(null)}
+            onLogin={(u) => { setUser(u); setPage("dashboard"); }}
+            toast={toast}
+          />
+        )}
+
+        {/* Toast */}
+        {toastMsg && <Toast msg={toastMsg} onDone={() => setToastMsg(null)} />}
+      </div>
+    </>
+  );
+}
